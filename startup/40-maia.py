@@ -134,8 +134,8 @@ def fly_maia(
     yield from bps.mv(maia.x_pixel_dim_pitch_sp.value, x_pitch)
     yield from bps.mv(maia.y_pixel_dim_pitch_sp.value, y_pitch)
 
-    yield from bps.mv(maia.x_pixel_dim_coord_extent_sp.value, xnum)
-    yield from bps.mv(maia.y_pixel_dim_coord_extent_sp.value, ynum)
+    yield from bps.mv(maia.x_pixel_dim_coord_extent_sp.value, xnum-1)
+    yield from bps.mv(maia.y_pixel_dim_coord_extent_sp.value, ynum-1)
     yield from bps.mv(maia.scan_order_sp.value, "01")
     yield from bps.mv(maia.meta_val_scan_order_sp.value, "01")
     yield from bps.mv(maia.pixel_dwell.value, dwell)
@@ -170,10 +170,10 @@ def fly_maia(
         kicked_off = True
         yield from bps.checkpoint()
         # by row
-        for i, y_pos in enumerate(np.linspace(ystart, ystop, ynum)):
+        for i, y_pos in enumerate(np.linspace(ystart, ystop - y_pitch, ynum-1)):
             yield from bps.checkpoint()
             # move to the row we want
-            yield from bps.mv(hf_stage.y, y_pos)
+            yield from bps.mv(hf_stage.y, y_pos + y_pitch/2)
             yield from bps.sleep(0.05)
             fout.write(
                 "%i %g %g %g %g\n" %
