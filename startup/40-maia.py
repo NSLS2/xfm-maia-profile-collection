@@ -115,7 +115,7 @@ def fly_maia(
 
     # Pitch must match what raster driver uses for pitch ...
     x_pitch = abs(xstop - xstart) / (xnum - 1)
-    #y_pitch = abs(ystop - ystart) / (ynum - 1)
+    y_pitch = abs(ystop - ystart) / (ynum - 1)
 
     # TODO compute this based on someting
     spd_x = x_pitch / dwell
@@ -132,7 +132,7 @@ def fly_maia(
     yield from bps.mv(maia.y_pixel_dim_origin_sp.value, ystart)
 
     yield from bps.mv(maia.x_pixel_dim_pitch_sp.value, x_pitch)
-    #yield from bps.mv(maia.y_pixel_dim_pitch_sp.value, y_pitch)
+    yield from bps.mv(maia.y_pixel_dim_pitch_sp.value, y_pitch)
 
     yield from bps.mv(maia.x_pixel_dim_coord_extent_sp.value, xnum)
     yield from bps.mv(maia.y_pixel_dim_coord_extent_sp.value, ynum)
@@ -176,12 +176,12 @@ def fly_maia(
             yield from bps.mv(hf_stage.y, y_pos)
             yield from bps.sleep(0.05)
             fout.write(
-                "%i %g %g %g %g/n" %
+                "%i %g %g %g %g\n" %
                 (i,
                 hf_stage.x.get().user_readback,
-                maia.enc_axis_0_pos_sp.value.get(),
+                maia.enc_axis_0_pos_mon.value.get(),
                 hf_stage.y.get().user_readback,
-                maia.enc_axis_1_pos_sp.value.get())
+                maia.enc_axis_1_pos_mon.value.get())
             )
             yield from bps.trigger_and_read(
                 [hf_stage, maia.enc_axis_0_pos_sp.value, maia.enc_axis_1_pos_sp.value],
@@ -192,24 +192,24 @@ def fly_maia(
                 yield from bps.mv(hf_stage.x, xstop)
                 yield from bps.sleep(0.05)
                 fout.write(
-                    "%i %g %g %g %g/n" %
+                    "%i %g %g %g %g\n" %
                     (i,
                     hf_stage.x.get().user_readback,
-                    maia.enc_axis_0_pos_sp.value.get(),
+                    maia.enc_axis_0_pos_mon.value.get(),
                     hf_stage.y.get().user_readback,
-                    maia.enc_axis_1_pos_sp.value.get())
+                    maia.enc_axis_1_pos_mon.value.get())
                 )
             else:
                 # for even-rows move from stop to start
                 yield from bps.mv(hf_stage.x, xstart)
                 yield from bps.sleep(0.05)
                 fout.write(
-                    "%i %g %g %g %g/n" % (
+                    "%i %g %g %g %g\n" % (
                     i,
                     hf_stage.x.get().user_readback,
-                    maia.enc_axis_0_pos_sp.value.get(),
+                    maia.enc_axis_0_pos_mon.value.get(),
                     hf_stage.y.get().user_readback,
-                    maia.enc_axis_1_pos_sp.value.get())
+                    maia.enc_axis_1_pos_mon.value.get())
                 )
             yield from bps.trigger_and_read(
                 [hf_stage, maia.enc_axis_0_pos_sp.value, maia.enc_axis_1_pos_sp.value],
