@@ -147,9 +147,10 @@ def fly_maia(
     # need something to generate a filename here.
     #    yield from bps.mv(maia.blog_group_next_sp,datafile))
     # start blog in kickoff?
-
+    kicked_off = False
     @bpp.reset_positions_decorator([hf_stage.x.velocity])
     def _raster_plan():
+        nonlocal kicked_off
 
         # open file to save positions
         fout = open("~/positions.dat", "w")
@@ -165,6 +166,7 @@ def fly_maia(
         yield from bps.stage(maia)  # currently a no-op
 
         yield from bps.kickoff(maia, wait=True)
+        kicked_off = True
         yield from bps.checkpoint()
         # by row
         for i, y_pos in enumerate(np.linspace(ystart, ystop, ynum)):
@@ -217,6 +219,8 @@ def fly_maia(
 
     def _cleanup_plan():
         # stop the maia ("I'll wait until you're done")
+        if not kicked_off:
+            return
         yield from bps.complete(maia, wait=True)
         # shut the shutter
         # yield from bps.mv(shutter, "Close")
