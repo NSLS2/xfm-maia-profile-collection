@@ -1,5 +1,5 @@
 from nslsii.detectors.maia import MAIA
-
+from pathlib import Path
 maia = MAIA("XFM:MAIA", name="maia")
 
 import numpy as np
@@ -153,7 +153,8 @@ def fly_maia(
         nonlocal kicked_off
 
         # open file to save positions
-        fout = open("~/positions.dat", "w")
+        fout = open(Path("~/positions.dat").expanduser(), "w")
+
         # set the motors to the right speed
         yield from bps.mv(hf_stage.x.velocity, spd_x)
 
@@ -175,12 +176,12 @@ def fly_maia(
             yield from bps.mv(hf_stage.y, y_pos)
             yield from bps.sleep(0.05)
             fout.write(
-                "%i %g %g %g %g/n",
-                i,
-                hf_stage.x.get(),
+                "%i %g %g %g %g/n" %
+                (i,
+                hf_stage.x.get().user_readback,
                 maia.enc_axis_0_pos_sp.value.get(),
-                hf_stage.y.get(),
-                maia.enc_axis_1_pos_sp.value.get(),
+                hf_stage.y.get().user_readback,
+                maia.enc_axis_1_pos_sp.value.get())
             )
             yield from bps.trigger_and_read(
                 [hf_stage, maia.enc_axis_0_pos_sp.value, maia.enc_axis_1_pos_sp.value],
@@ -191,24 +192,24 @@ def fly_maia(
                 yield from bps.mv(hf_stage.x, xstop)
                 yield from bps.sleep(0.05)
                 fout.write(
-                    "%i %g %g %g %g/n",
-                    i,
-                    hf_stage.x.get(),
+                    "%i %g %g %g %g/n" %
+                    (i,
+                    hf_stage.x.get().user_readback,
                     maia.enc_axis_0_pos_sp.value.get(),
-                    hf_stage.y.get(),
-                    maia.enc_axis_1_pos_sp.value.get(),
+                    hf_stage.y.get().user_readback,
+                    maia.enc_axis_1_pos_sp.value.get())
                 )
             else:
                 # for even-rows move from stop to start
                 yield from bps.mv(hf_stage.x, xstart)
                 yield from bps.sleep(0.05)
                 fout.write(
-                    "%i %g %g %g %g/n",
+                    "%i %g %g %g %g/n" % (
                     i,
-                    hf_stage.x.get(),
+                    hf_stage.x.get().user_readback,
                     maia.enc_axis_0_pos_sp.value.get(),
-                    hf_stage.y.get(),
-                    maia.enc_axis_1_pos_sp.value.get(),
+                    hf_stage.y.get().user_readback,
+                    maia.enc_axis_1_pos_sp.value.get())
                 )
             yield from bps.trigger_and_read(
                 [hf_stage, maia.enc_axis_0_pos_sp.value, maia.enc_axis_1_pos_sp.value],
