@@ -67,6 +67,7 @@ def fly_maia(
         are passed through to maia metadata.
     """
     # shutter = shut_b
+    print("version 060822_1\n")
     md = md or {}
     _md = {
         "detectors": ["maia"],
@@ -88,7 +89,7 @@ def fly_maia(
         "snaking": [False, True],
         "plan_name": "fly_maia",
     }
-    _md.update(md)
+    _md.update(md)  # Meta data. Where from?
 
     md = _md
 
@@ -114,8 +115,8 @@ def fly_maia(
         ystop, ystart = ystart, ystop
 
     # Pitch must match what raster driver uses for pitch ...
-    x_pitch = abs(xstop - xstart) / (xnum - 1)
-    y_pitch = abs(ystop - ystart) / (ynum - 1)
+    x_pitch = abs(xstop - xstart) / (xnum)
+    y_pitch = abs(ystop - ystart) / (ynum)
 
     # TODO compute this based on someting
     spd_x = x_pitch / dwell
@@ -125,7 +126,7 @@ def fly_maia(
     x_val = yield from bps.rd(hf_stage.x)
     y_val = yield from bps.rd(hf_stage.y)
     # TODO, depends on actual device
-    yield from bps.mv(maia.enc_axis_0_pos_sp.value, x_val)
+    yield from bps.mv(maia.enc_axis_0_pos_sp.value, x_val) # Take parameter values and stuff them into bolgd?
     yield from bps.mv(maia.enc_axis_1_pos_sp.value, y_val)
 
     yield from bps.mv(maia.x_pixel_dim_origin_sp.value, xstart)
@@ -133,9 +134,12 @@ def fly_maia(
 
     yield from bps.mv(maia.x_pixel_dim_pitch_sp.value, x_pitch)
     yield from bps.mv(maia.y_pixel_dim_pitch_sp.value, y_pitch)
+    print("xpitch=",x_pitch," ypitch=",y_pitch)
 
-    yield from bps.mv(maia.x_pixel_dim_coord_extent_sp.value, xnum-1)
-    yield from bps.mv(maia.y_pixel_dim_coord_extent_sp.value, ynum-1)
+    yield from bps.mv(maia.x_pixel_dim_coord_extent_sp.value, xnum)
+    yield from bps.mv(maia.y_pixel_dim_coord_extent_sp.value, ynum)
+    print("xnum=",xnum," ynum=",ynum)
+
     yield from bps.mv(maia.scan_order_sp.value, "01")
     yield from bps.mv(maia.meta_val_scan_order_sp.value, "01")
     yield from bps.mv(maia.pixel_dwell.value, dwell)
@@ -170,10 +174,11 @@ def fly_maia(
         kicked_off = True
         yield from bps.checkpoint()
         # by row
-        for i, y_pos in enumerate(np.linspace(ystart, ystop - y_pitch, ynum-1)):
+        for i, y_pos in enumerate(np.linspace(ystart, ystop , ynum+1)):
             yield from bps.checkpoint()
             # move to the row we want
-            yield from bps.mv(hf_stage.y, y_pos + y_pitch/2)
+            yield from bps.mv(hf_stage.y, y_pos)
+            print("ypos=",y_pos)
             yield from bps.sleep(0.05)
             fout.write(
                 "%i %g %g %g %g\n" %
