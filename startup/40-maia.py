@@ -1,6 +1,6 @@
 from nslsii.detectors.maia import MAIA
-from pathlib import Path
-maia = MAIA("XFM:MAIA", name="maia")
+
+maia = MAIA('XFM:MAIA', name='maia')
 
 import numpy as np
 
@@ -14,10 +14,10 @@ sample_md = {"sample": {"name": "Ni mesh", "owner": "stolen"}}
 def fly_maia(
     ystart,
     ystop,
-    ynum,
+    ypitch,
     xstart,
     xstop,
-    xnum,
+    xpitch,
     dwell,
     *,
     group=None,
@@ -31,17 +31,11 @@ def fly_maia(
 
     Parameters
     ----------
-    ystart, ystop : float
-        The limits of the scan along the slow direction in absolute mm.
+    ystart, ystop, ypitch : float
+        The start position, end position and pixel pitch of the scan along the slow direction in absolute mm.
 
-    ynum : int
-        The number of pixels (rows) along the slow direction.
-
-    xstart, xstop : float
+    xstart, xwidth, xpitch : float
         The limits of the scan along the fast direction in absolute mm.
-
-    xnum : int
-        The number of pixels (columns) along the fast direction.
 
     dwell : float
         The dwelll time in s.  This is used to set the motor velocity.
@@ -66,8 +60,217 @@ def fly_maia(
 
         are passed through to maia metadata.
     """
-    # shutter = shut_b
-    print("version 060822_1\n")
+    mres=0.00078125
+    nxpitch=int(xpitch/mres)
+    if(nxpitch<3): # Force minimum pitch to 3 motor steps
+        nxpitch=3
+    nypitch=int(ypitch/mres)
+    if(nypitch<3): # Force minimum pitch to 3 motor steps
+        nypitch=3
+    xpitch=nxpitch*mres
+    print("Warning: I am forcing xpitch to be an integer multiple of motor resolution: ", xpitch);
+    ypitch=nypitch*mres
+    print("Warning: I am forcing ypitch to be an integer multiple of motor resolution: ", ypitch);
+    if xstart > xstop:
+        xstop, xstart = xstart, xstop
+
+    if ystart > ystop:
+        ystop, ystart = ystart, ystop
+    
+    xnum = int((xstop -xstart)/xpitch)    # Should force to integer and enforce size = N * pitch
+    ynum = int((ystop-ystart)/ypitch)
+
+#	if (xsize != (xnum * xpitch)): 
+#	    xnum+=1
+    xsize = xnum*xpitch
+    print("Warning: I am forcing xsize to be an integer multiple of xpitch: ", xsize);
+
+#	if (ysize != (ynum * ypitch)):
+#	    ynum+=1
+    ysize = ynum*ypitch
+    print("Warning: I am forcing ysize to be an integer multiple of ypitch: ", ysize);
+
+# shutter = shut_b
+    md = md or {}
+    _md = {
+        "detectors": ["maia"],
+        "shape": [ynum, xnum],
+        "motors": [m.name for m in [hf_stage.y, hf_stage.x]],
+        "num_steps": xnum * ynum,
+        "plan_args": dict(
+            ystart=ystart,
+            ystop=ystart+ysize,
+            ynum=ynum,
+            xstart=xstart,
+            xstop=xstart+xsize,
+            xnum=xnum,
+            dwell=dwell,
+            group=repr(group),
+            md=md,
+        ),
+        "extents": [[ystart, ystop], [xstart, xstop]],
+        "snaking": [False, True],
+        "plan_name": "fly_maia",
+    }
+    _md.update(md)
+
+    md = _md
+
+    sample_md = md.get("sample", {})
+    for k in ["info", "name", "owner", "serial", "type"]:
+        v = sample_md.get(k, "")
+        sig = getattr(maia, "meta_val_sample_{}_sp.value".format(k))
+        yield from bps.mv(sig, str(v))
+
+    scan_md = md.get("scan", {})
+    for k in ["region", "info", "seq_num", "seq_total"]:
+        v = scan_md.get(k, "")
+        sig = getattr(maia, "meta_val_scan_{}_sp.value".format(k))
+        yield from bps.mv(sig, str(v))
+
+    if group is not None:
+        yield from bps.mv(maia.blog_group_next_sp.value, group)
+
+    #if xstart > xstop:
+    #    xstop, xstart = xstart, xstop
+
+    #if ystart > ystop:
+    #    ystop, ystart = ystart, ystop
+
+    # Pitch must match what raster driver uses for pitch ...
+    #x_pitch = abs(xstop - xstart) / (xnum - 1)
+    #y_pitch = abs(ystop - ystart) / (ynum - 1)
+
+    # TODO compute this based on someting
+    spd_x = xpitch / dwell
+    print("speed_x=",spd_x)
+
+    yield from bps.mv(hf_stage.x, xstart, hf_stage.y, ystart)
+
+    x_val = yield from bps.rd(hf_stage.x)
+    y_val = yield from bps.rd(hf_stage.y)
+    # TODO, depends on actual device
+    yield from bps.mv(maia.enc_axis_0_pos_sp.value, x_val)
+    yield from bps.mv(maia.enc_axis_1_pos_sp.value, y_val)
+
+    yield from bps.mv(maia.x_pixel_dim_origin_sp.value, xstart)
+    yield from bps.mv(maia.y_pixel_dim_origin_sp.value, ystart)
+
+    yield from bps.mv(maia.x_pixel_dim_pitch_sp.value, xpitch)
+    yield from bps.mv(maia.y_pixel_dim_pitch_sp.value, ypitch)
+
+    yield from bps.mv(maia.x_pixel_dim_coord_extent_sp.value, xnum)
+    yield from bps.mv(maia.y_pixel_dim_coord_extent_sp.value, ynum)
+    yield from bps.mv(maia.scan_order_sp.value, "01")
+    yield from bps.mv(maia.meta_val_scan_order_sp.value, "01")
+    yield from bps.mv(maia.pixel_dwell.value, dwell)
+    yield from bps.mv(maia.meta_val_scan_dwell.value, str(dwell))
+
+    yield from bps.mv(maia.meta_val_beam_particle_sp.value, "photon")
+    yield from bps.mv(
+        maia.meta_val_beam_energy_sp.value, "{:.2f}".format(20_000)
+        )
+    #    yield from bps.mv(maia.maia_scan_info
+    # need something to generate a filename here.
+    #    yield from bps.mv(maia.blog_group_next_sp,datafile))
+    # start blog in kickoff?
+
+    @bpp.reset_positions_decorator([hf_stage.x.velocity])
+    def _raster_plan():
+        print("mark scan outline")
+        yield from bps.mv(hf_stage.x, xstart)
+        yield from bps.mv(hf_stage.y, ystart)
+        yield from bps.sleep(1.0)
+        yield from bps.mv(hf_stage.x, xstop)
+        yield from bps.sleep(1.0)
+        yield from bps.mv(hf_stage.y, ystop)
+        yield from bps.sleep(1.0)
+        yield from bps.mv(hf_stage.x, xstart)
+        yield from bps.sleep(1.0)
+        yield from bps.mv(hf_stage.y, ystart)
+        #yield from bps.input("Press any key if it's OK to continue")
+        print("done outline")
+        # open file to save positions
+        fout=open('/home/xf04bm/positions.dat','w')
+	    # set the motors to the right speed
+        yield from bps.mv(hf_stage.x.velocity, spd_x)
+        print("set speed")
+        # yield from bps.mv(shutter, "Open")
+        start_uid = yield from bps.open_run(md)
+        print("open run")
+        yield from bps.mv(maia.meta_val_scan_crossref_sp.value, start_uid)
+        # long int here.  consequneces of changing?
+        #    yield from bps.mv(maia.scan_number_sp,start_uid)
+        yield from bps.stage(maia)  # currently a no-op
+	
+
+        yield from bps.kickoff(maia, wait=True)
+        print("kickoff")
+        yield from bps.checkpoint()
+        print("checkpoint")
+        yield from bps.mv(hf_stage.x, xstart)
+        yield from bps.mv(hf_stage.y, ystart)
+        # by row
+        for i in range(0,ynum):
+            y_pos=ystart+i*ypitch
+            print("ypos=",y_pos,"ypixel=",i)
+            yield from bps.checkpoint()
+            # move to the row we want
+            yield from bps.mv(hf_stage.y, y_pos)
+            yield from bps.sleep(0.1)
+            #fout.write("%i %g %g %g %g/n",i,hf_stage.x.get(),maia.enc_axis_0_pos_sp.value.get(),hf_stage.y.get(),maia.enc_axis_1_pos_sp.value.get())
+            if i % 2:
+                # for odd-rows move from start to stop
+                yield from bps.mv(hf_stage.x, xstop)
+                yield from bps.sleep(0.05)
+                fout.write(str(i)+"  "+str(hf_stage.x.position)+"   "+str(maia.enc_axis_0_pos_mon.value.get())+"   "+str(hf_stage.y.position)+"   "+str(maia.enc_axis_1_pos_mon.value.get())+"\n")
+            else:
+                # for even-rows move from stop to start
+                yield from bps.mv(hf_stage.x, xstart)
+                yield from bps.sleep(0.05)
+                fout.write(str(i)+"  "+str(hf_stage.x.position)+"   "+str(maia.enc_axis_0_pos_mon.value.get())+"   "+str(hf_stage.y.position)+"   "+str(maia.enc_axis_1_pos_mon.value.get())+"\n")
+        fout.close()
+
+    def _cleanup_plan():
+        # stop the maia ("I'll wait until you're done")
+        yield from bps.complete(maia, wait=True)
+        # shut the shutter
+        # yield from bps.mv(shutter, "Close")
+        # collect data from maia
+        yield from bps.collect(maia)
+
+        yield from bps.unstage(maia)
+        yield from bps.close_run()
+        yield from bps.mv(maia.meta_val_scan_crossref_sp.value, "")
+        for k in ["info", "name", "owner", "serial", "type"]:
+            sig = getattr(maia, "meta_val_sample_{}_sp.value".format(k))
+            yield from bps.mv(sig, "")
+
+        for k in ["region", "info", "seq_num", "seq_total"]:
+            sig = getattr(maia, "meta_val_scan_{}_sp.value".format(k))
+            yield from bps.mv(sig, "")
+        yield from bps.mv(maia.meta_val_beam_energy_sp.value, "")
+        yield from bps.mv(maia.meta_val_scan_dwell.value, "")
+        yield from bps.mv(maia.meta_val_scan_order_sp.value, "")
+
+    return (yield from bpp.finalize_wrapper(_raster_plan(), _cleanup_plan()))
+
+
+def fly_maia_finger_sync(
+    ystart,
+    ystop,
+    ynum,
+    xstart,
+    xstop,
+    xnum,
+    dwell,
+    *,
+    group=None,
+    md=None,
+    shut_b,
+    hf_stage,
+):
+    shutter = shut_b
     md = md or {}
     _md = {
         "detectors": ["maia"],
@@ -89,24 +292,9 @@ def fly_maia(
         "snaking": [False, True],
         "plan_name": "fly_maia",
     }
-    _md.update(md)  # Meta data. Where from?
+    _md.update(md)
 
     md = _md
-
-    sample_md = md.get("sample", {})
-    for k in ["info", "name", "owner", "serial", "type"]:
-        v = sample_md.get(k, "")
-        sig = getattr(maia, "meta_val_sample_{}_sp.value".format(k))
-        yield from bps.mv(sig, str(v))
-
-    scan_md = md.get("scan", {})
-    for k in ["region", "info", "seq_num", "seq_total"]:
-        v = scan_md.get(k, "")
-        sig = getattr(maia, "meta_val_scan_{}_sp.value".format(k))
-        yield from bps.mv(sig, str(v))
-
-    if group is not None:
-        yield from bps.mv(maia.blog_group_next_sp.value, group)
 
     if xstart > xstop:
         xstop, xstart = xstart, xstop
@@ -115,136 +303,39 @@ def fly_maia(
         ystop, ystart = ystart, ystop
 
     # Pitch must match what raster driver uses for pitch ...
-    x_pitch = abs(xstop - xstart) / (xnum)
-    y_pitch = abs(ystop - ystart) / (ynum)
+    x_pitch = abs(xstop - xstart) / (xnum - 1)
 
     # TODO compute this based on someting
     spd_x = x_pitch / dwell
 
     yield from bps.mv(hf_stage.x, xstart, hf_stage.y, ystart)
 
-    x_val = yield from bps.rd(hf_stage.x)
-    y_val = yield from bps.rd(hf_stage.y)
-    # TODO, depends on actual device
-    yield from bps.mv(maia.enc_axis_0_pos_sp.value, x_val) # Take parameter values and stuff them into bolgd?
-    yield from bps.mv(maia.enc_axis_1_pos_sp.value, y_val)
-
-    yield from bps.mv(maia.x_pixel_dim_origin_sp.value, xstart)
-    yield from bps.mv(maia.y_pixel_dim_origin_sp.value, ystart)
-
-    yield from bps.mv(maia.x_pixel_dim_pitch_sp.value, x_pitch)
-    yield from bps.mv(maia.y_pixel_dim_pitch_sp.value, y_pitch)
-    print("xpitch=",x_pitch," ypitch=",y_pitch)
-
-    yield from bps.mv(maia.x_pixel_dim_coord_extent_sp.value, xnum)
-    yield from bps.mv(maia.y_pixel_dim_coord_extent_sp.value, ynum)
-    print("xnum=",xnum," ynum=",ynum)
-
-    yield from bps.mv(maia.scan_order_sp.value, "01")
-    yield from bps.mv(maia.meta_val_scan_order_sp.value, "01")
-    yield from bps.mv(maia.pixel_dwell.value, dwell)
-    yield from bps.mv(maia.meta_val_scan_dwell.value, str(dwell))
-
-    yield from bps.mv(maia.meta_val_beam_particle_sp.value, "photon")
-    yield from bps.mv(maia.meta_val_beam_energy_sp.value, "{:.2f}".format(20_000))
-    #    yield from bps.mv(maia.maia_scan_info
-    # need something to generate a filename here.
-    #    yield from bps.mv(maia.blog_group_next_sp,datafile))
-    # start blog in kickoff?
-    kicked_off = False
     @bpp.reset_positions_decorator([hf_stage.x.velocity])
     def _raster_plan():
-        nonlocal kicked_off
-
-        # open file to save positions
-        fout = open(Path("~/positions.dat").expanduser(), "w")
 
         # set the motors to the right speed
         yield from bps.mv(hf_stage.x.velocity, spd_x)
 
-        # yield from bps.mv(shutter, "Open")
-        start_uid = yield from bps.open_run(md)
+        yield from bps.mv(shutter, "Open")
+        yield from bps.open_run(md)
 
-        yield from bps.mv(maia.meta_val_scan_crossref_sp.value, start_uid)
-        # long int here.  consequneces of changing?
-        #    yield from bps.mv(maia.scan_number_sp,start_uid)
-        yield from bps.stage(maia)  # currently a no-op
-
-        yield from bps.kickoff(maia, wait=True)
-        kicked_off = True
         yield from bps.checkpoint()
         # by row
-        for i, y_pos in enumerate(np.linspace(ystart, ystop , ynum+1)):
+        for i, y_pos in enumerate(np.linspace(ystart, ystop, ynum)):
             yield from bps.checkpoint()
             # move to the row we want
             yield from bps.mv(hf_stage.y, y_pos)
-            print("ypos=",y_pos)
-            yield from bps.sleep(0.05)
-            fout.write(
-                "%i %g %g %g %g\n" %
-                (i,
-                hf_stage.x.get().user_readback,
-                maia.enc_axis_0_pos_mon.value.get(),
-                hf_stage.y.get().user_readback,
-                maia.enc_axis_1_pos_mon.value.get())
-            )
-            yield from bps.trigger_and_read(
-                [hf_stage, maia.enc_axis_0_pos_sp.value, maia.enc_axis_1_pos_sp.value],
-                name="row_ends",
-            )
             if i % 2:
                 # for odd-rows move from start to stop
                 yield from bps.mv(hf_stage.x, xstop)
-                yield from bps.sleep(0.05)
-                fout.write(
-                    "%i %g %g %g %g\n" %
-                    (i,
-                    hf_stage.x.get().user_readback,
-                    maia.enc_axis_0_pos_mon.value.get(),
-                    hf_stage.y.get().user_readback,
-                    maia.enc_axis_1_pos_mon.value.get())
-                )
             else:
                 # for even-rows move from stop to start
                 yield from bps.mv(hf_stage.x, xstart)
-                yield from bps.sleep(0.05)
-                fout.write(
-                    "%i %g %g %g %g\n" % (
-                    i,
-                    hf_stage.x.get().user_readback,
-                    maia.enc_axis_0_pos_mon.value.get(),
-                    hf_stage.y.get().user_readback,
-                    maia.enc_axis_1_pos_mon.value.get())
-                )
-            yield from bps.trigger_and_read(
-                [hf_stage, maia.enc_axis_0_pos_sp.value, maia.enc_axis_1_pos_sp.value],
-                name="row_ends",
-            )
-
-        fout.close()
 
     def _cleanup_plan():
-        # stop the maia ("I'll wait until you're done")
-        if not kicked_off:
-            return
-        yield from bps.complete(maia, wait=True)
         # shut the shutter
-        # yield from bps.mv(shutter, "Close")
-        # collect data from maia
-        yield from bps.collect(maia)
+        yield from bps.mv(shutter, "Close")
 
-        yield from bps.unstage(maia)
         yield from bps.close_run()
-        yield from bps.mv(maia.meta_val_scan_crossref_sp.value, "")
-        for k in ["info", "name", "owner", "serial", "type"]:
-            sig = getattr(maia, "meta_val_sample_{}_sp.value".format(k))
-            yield from bps.mv(sig, "")
-
-        for k in ["region", "info", "seq_num", "seq_total"]:
-            sig = getattr(maia, "meta_val_scan_{}_sp.value".format(k))
-            yield from bps.mv(sig, "")
-        yield from bps.mv(maia.meta_val_beam_energy_sp.value, "")
-        yield from bps.mv(maia.meta_val_scan_dwell.value, "")
-        yield from bps.mv(maia.meta_val_scan_order_sp.value, "")
 
     return (yield from bpp.finalize_wrapper(_raster_plan(), _cleanup_plan()))
