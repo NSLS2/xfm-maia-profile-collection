@@ -80,14 +80,21 @@ def fly_maia(
     xnum = int((xstop -xstart)/xpitch)    # Should force to integer and enforce size = N * pitch
     ynum = int((ystop-ystart)/ypitch)
 
-#	if (xsize != (xnum * xpitch)): 
-#	    xnum+=1
-    xsize = xnum*xpitch
+    print("xnum=",xnum)
+    print("ynum=",ynum)
+
+    if(xstart+xnum*xpitch < xstop):
+      xnum+=1
+
+    xsize = xnum*(xpitch)
+    xstop=xstart+xsize
     print("Warning: I am forcing xsize to be an integer multiple of xpitch: ", xsize);
 
-#	if (ysize != (ynum * ypitch)):
-#	    ynum+=1
-    ysize = ynum*ypitch
+    if(ystart+ynum*ypitch < ystop):
+      ynum+=1
+
+    ysize = ynum*(ypitch)
+    ystop=ystart+ysize
     print("Warning: I am forcing ysize to be an integer multiple of ypitch: ", ysize);
 
 # shutter = shut_b
@@ -145,6 +152,7 @@ def fly_maia(
     spd_x = xpitch / dwell
     print("speed_x=",spd_x)
 
+    # Move to bottom LH corner of scan
     yield from bps.mv(hf_stage.x, xstart, hf_stage.y, ystart)
 
     x_val = yield from bps.rd(hf_stage.x)
@@ -188,7 +196,7 @@ def fly_maia(
         yield from bps.mv(hf_stage.x, xstart)
         yield from bps.sleep(1.0)
         yield from bps.mv(hf_stage.y, ystart)
-        #yield from bps.input("Press any key if it's OK to continue")
+        input("Press any key if it's OK to continue")
         print("done outline")
         # open file to save positions
         fout=open('/home/xf04bm/positions.dat','w')
@@ -210,6 +218,7 @@ def fly_maia(
         print("checkpoint")
         yield from bps.mv(hf_stage.x, xstart)
         yield from bps.mv(hf_stage.y, ystart)
+        yield from bps.sleep(0.2)
         # by row
         for i in range(0,ynum):
             y_pos=ystart+i*ypitch
@@ -217,30 +226,34 @@ def fly_maia(
             yield from bps.checkpoint()
             # move to the row we want
             yield from bps.mv(hf_stage.y, y_pos)
-            yield from bps.sleep(0.1)
+            yield from bps.sleep(0.2)
             #fout.write("%i %g %g %g %g/n",i,hf_stage.x.get(),maia.enc_axis_0_pos_sp.value.get(),hf_stage.y.get(),maia.enc_axis_1_pos_sp.value.get())
             if i % 2:
                 # for odd-rows move from start to stop
                 yield from bps.mv(hf_stage.x, xstop)
-                yield from bps.sleep(0.05)
+                yield from bps.sleep(0.2)
                 fout.write(str(i)+"  "+str(hf_stage.x.position)+"   "+str(maia.enc_axis_0_pos_mon.value.get())+"   "+str(hf_stage.y.position)+"   "+str(maia.enc_axis_1_pos_mon.value.get())+"\n")
             else:
                 # for even-rows move from stop to start
                 yield from bps.mv(hf_stage.x, xstart)
-                yield from bps.sleep(0.05)
+                yield from bps.sleep(0.2)
                 fout.write(str(i)+"  "+str(hf_stage.x.position)+"   "+str(maia.enc_axis_0_pos_mon.value.get())+"   "+str(hf_stage.y.position)+"   "+str(maia.enc_axis_1_pos_mon.value.get())+"\n")
         fout.close()
 
     def _cleanup_plan():
         # stop the maia ("I'll wait until you're done")
         yield from bps.complete(maia, wait=True)
+        
+        # return stage to scan origin
+        yield from bps.mv(hf_stage.x, xstart)
+        yield from bps.mv(hf_stage.y, ystart)
         # shut the shutter
         # yield from bps.mv(shutter, "Close")
         # collect data from maia
         yield from bps.collect(maia)
-
-        yield from bps.unstage(maia)
         yield from bps.close_run()
+        yield from bps.unstage(maia)
+        #yield from bps.close_run()
         yield from bps.mv(maia.meta_val_scan_crossref_sp.value, "")
         for k in ["info", "name", "owner", "serial", "type"]:
             sig = getattr(maia, "meta_val_sample_{}_sp.value".format(k))
@@ -335,7 +348,8 @@ def fly_maia_finger_sync(
     def _cleanup_plan():
         # shut the shutter
         yield from bps.mv(shutter, "Close")
-
+        yield from bps.mv(hf_stage.x, xstart)
+        yield from bps.mv(hf_stage.y, ystart)
         yield from bps.close_run()
 
     return (yield from bpp.finalize_wrapper(_raster_plan(), _cleanup_plan()))
