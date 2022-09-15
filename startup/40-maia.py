@@ -38,6 +38,78 @@ def maia_get(var):
     #print(val)
     return(val)
 
+def xscan(start, stop, step, dwell):
+    mres=0.00078125
+    nxpitch=int(step/mres)
+    if(nxpitch<3): # Force minimum pitch to 3 motor steps
+        nxpitch=3
+    step=nxpitch*mres
+    print("Warning: I am forcing step to be an integer multiple of motor resolution: ", step);
+    speed=step/dwell
+    print("Speed=",speed)
+    if start > stop:
+        stop, start = start, stop
+    xnum = int((stop - start)/step)
+    if(start+xnum*step < stop):
+      xnum+=1
+    print("xnum=",xnum)
+    xsize = xnum*step
+    stop=start+xsize
+    print("Warning: I am forcing xsize to be an integer multiple of step: ", xsize);
+    fout=open('/home/xf04bm/xpos.dat','w')
+    # set the motors to the right speed
+    yield from bps.mv(M.x.velocity, speed)
+    print("set speed")
+    print("Start=",start,"  Stop=",stop,"Step=",step,"   Speed=",speed)
+    input("Press any key if it's OK to continue")
+    # Move to beginning of scan
+    yield from bps.mv(M.x, start)
+    for i in range(0,xnum):
+        pos=start+i*step
+        yield from bps.mv(M.x, pos)
+        yield from bps.sleep(0.2)
+        a_x=str(maia_get("encoder.axis[0].position\n"))
+        fout.write(str(i)+"  "+str(M.x.position)+"   "+a_x[0:len(a_x)-1]+"\n")
+    fout.close()
+    yield from bps.mv(M.x, start)
+
+def yscan(start, stop, step, dwell):
+    mres=0.00078125
+    nxpitch=int(step/mres)
+    if(nxpitch<3): # Force minimum pitch to 3 motor steps
+        nxpitch=3
+    step=nxpitch*mres
+    print("Warning: I am forcing step to be an integer multiple of motor resolution: ", step);
+    speed=abs(step/dwell)
+    print("Speed=",speed)
+    sign=1
+    if start > stop:
+        sign=-1
+    #    stop, start = start, stop
+    xnum = int((stop - start)/(sign*step))
+    if(start+xnum*step < stop):
+      xnum+=1
+    print("xnum=",xnum)
+    xsize = xnum*step
+    stop=start+sign*xsize
+    print("Warning: I am forcing size to be an integer multiple of step: ", xsize);
+    fout=open('/home/xf04bm/ypos.dat','w')
+    # set the motors to the right speed
+    yield from bps.mv(M.y.velocity, speed)
+    print("set speed")
+    print("Start=",start,"  Stop=",stop,"Step=",step,"   Speed=",speed)
+    input("Press any key if it's OK to continue")
+    # Move to beginning of scan
+    yield from bps.mv(M.y, start)
+    for i in range(0,xnum):
+        pos=start+i*sign*step
+        yield from bps.mv(M.y, pos)
+        yield from bps.sleep(0.2)
+        a_x=str(maia_get("encoder.axis[1].position\n"))
+        fout.write(str(i)+"  "+str(M.y.position)+"   "+a_x[0:len(a_x)-1]+"\n")
+    fout.close()
+    yield from bps.mv(M.y, start)
+
 sample_md = {"sample": {"name": "Ni mesh", "owner": "stolen"}}
 
 
@@ -90,16 +162,17 @@ def fly_maia(
 
         are passed through to maia metadata.
     """
-    mres=0.00078125
-    nxpitch=int(xpitch/mres)
+    x_mres=0.00078125
+    y_mres=0.00025
+    nxpitch=int(xpitch/x_mres)
     if(nxpitch<3): # Force minimum pitch to 3 motor steps
         nxpitch=3
-    nypitch=int(ypitch/mres)
+    nypitch=int(ypitch/y_mres)
     if(nypitch<3): # Force minimum pitch to 3 motor steps
         nypitch=3
-    xpitch=nxpitch*mres
+    xpitch=nxpitch*x_mres
     print("Warning: I am forcing xpitch to be an integer multiple of motor resolution: ", xpitch);
-    ypitch=nypitch*mres
+    ypitch=nypitch*y_mres
     print("Warning: I am forcing ypitch to be an integer multiple of motor resolution: ", ypitch);
     if xstart > xstop:
         xstop, xstart = xstart, xstop
@@ -188,8 +261,8 @@ def fly_maia(
     x_val = yield from bps.rd(hf_stage.x)
     y_val = yield from bps.rd(hf_stage.y)
     # TODO, depends on actual device
-    yield from bps.mv(maia.enc_axis_0_pos_sp.value, x_val+xpitch/2)
-    yield from bps.mv(maia.enc_axis_1_pos_sp.value, y_val+ypitch/2)
+    yield from bps.mv(maia.enc_axis_0_pos_sp.value, x_val)
+    yield from bps.mv(maia.enc_axis_1_pos_sp.value, y_val)
 
     yield from bps.mv(maia.x_pixel_dim_origin_sp.value, xstart)
     yield from bps.mv(maia.y_pixel_dim_origin_sp.value, ystart)
@@ -233,14 +306,15 @@ def fly_maia(
 	    # set the motors to the right speed
         yield from bps.mv(hf_stage.x.velocity, spd_x)
         print("set speed")
-        # yield from bps.mv(shutter, "Open")
+        yield from bps.mv(shutter, "Open")
+        sleep(1)
         start_uid = yield from bps.open_run(md)
         print("open run")
         yield from bps.mv(maia.meta_val_scan_crossref_sp.value, start_uid)
         # long int here.  consequneces of changing?
         #    yield from bps.mv(maia.scan_number_sp,start_uid)
         yield from bps.stage(maia)  # currently a no-op
-	
+	    #take up backlash
         yield from bps.mv(hf_stage.x, xstart-1.0)
         yield from bps.mv(hf_stage.x, xstart)
         yield from bps.mv(hf_stage.y, ystart-1.0)
@@ -254,13 +328,13 @@ def fly_maia(
         yield from bps.mv(hf_stage.y, ystart)
         yield from bps.sleep(0.2)
         # by row
-        for i in range(1,ynum):
+        for i in range(0,ynum):
             y_pos=ystart+i*ypitch
             
             yield from bps.checkpoint()
             # move to the row we want
             yield from bps.mv(hf_stage.y, y_pos)
-            yield from bps.sleep(0.2)
+        #    yield from bps.sleep(0.5)
             a_x=str(maia_get("encoder.axis[0].position\n"))
             a_y=str(maia_get("encoder.axis[1].position\n"))
             print("ypos=",y_pos,"ypixel=",i, a_x[0:len(a_x)-1], a_y)
@@ -268,7 +342,7 @@ def fly_maia(
             if i % 2:
                 # for odd-rows move from start to stop
                 yield from bps.mv(hf_stage.x, xstop)
-                yield from bps.sleep(0.2)
+        #        yield from bps.sleep(0.5)
                 a_x=str(maia_get("encoder.axis[0].position\n"))
                 a_y=str(maia_get("encoder.axis[1].position\n"))
                 fout.write(str(i)+"  "+str(hf_stage.x.position)+"   "+a_x[0:len(a_x)-1]+"   "+str(hf_stage.y.position)+"   "+a_y[0:len(a_y)-1]+"\n")
@@ -276,7 +350,7 @@ def fly_maia(
             else:
                 # for even-rows move from stop to start
                 yield from bps.mv(hf_stage.x, xstart)
-                yield from bps.sleep(0.2)
+        #        yield from bps.sleep(0.5)
                 a_x=str(maia_get("encoder.axis[0].position\n"))
                 a_y=str(maia_get("encoder.axis[1].position\n"))
                 fout.write(str(i)+"  "+str(hf_stage.x.position)+"   "+a_x[0:len(a_x)-1]+"   "+str(hf_stage.y.position)+"   "+a_y[0:len(a_y)-1]+"\n")
@@ -293,7 +367,8 @@ def fly_maia(
         yield from bps.mv(hf_stage.y, ystart-1.0)
         yield from bps.mv(hf_stage.y, ystart)
         # shut the shutter
-        # yield from bps.mv(shutter, "Close")
+        yield from bps.mv(shutter, "Close")
+        sleep(1)
         # collect data from maia
         yield from bps.collect(maia)
         yield from bps.close_run()
