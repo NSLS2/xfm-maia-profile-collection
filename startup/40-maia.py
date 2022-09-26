@@ -165,11 +165,11 @@ def fly_maia(
     x_mres=0.00078125
     y_mres=0.00025
     nxpitch=int(xpitch/x_mres)
-    if(nxpitch<3): # Force minimum pitch to 3 motor steps
-        nxpitch=3
+    if(nxpitch<2): # Force minimum pitch to 3 motor steps
+        nxpitch=2
     nypitch=int(ypitch/y_mres)
-    if(nypitch<3): # Force minimum pitch to 3 motor steps
-        nypitch=3
+    if(nypitch<2): # Force minimum pitch to 3 motor steps
+        nypitch=2
     xpitch=nxpitch*x_mres
     print("Warning: I am forcing xpitch to be an integer multiple of motor resolution: ", xpitch);
     ypitch=nypitch*y_mres
@@ -306,8 +306,8 @@ def fly_maia(
 	    # set the motors to the right speed
         yield from bps.mv(hf_stage.x.velocity, spd_x)
         print("set speed")
-        yield from bps.mv(shutter, "Open")
-        sleep(1)
+        #yield from bps.mv(shutter, "Open")
+        #yield from bps.sleep(1)
         start_uid = yield from bps.open_run(md)
         print("open run")
         yield from bps.mv(maia.meta_val_scan_crossref_sp.value, start_uid)
@@ -367,8 +367,8 @@ def fly_maia(
         yield from bps.mv(hf_stage.y, ystart-1.0)
         yield from bps.mv(hf_stage.y, ystart)
         # shut the shutter
-        yield from bps.mv(shutter, "Close")
-        sleep(1)
+        #yield from bps.mv(shutter, "Close")
+        #yield from bps.sleep(1)
         # collect data from maia
         yield from bps.collect(maia)
         yield from bps.close_run()
