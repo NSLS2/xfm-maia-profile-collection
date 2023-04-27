@@ -1,4 +1,7 @@
+#from ophyd.log import config_ophyd_logging
+#config_ophyd_logging(level='DEBUG')
 from nslsii.detectors.maia import MAIA
+
 
 maia = MAIA('XFM:MAIA', name='maia')
 
@@ -10,36 +13,36 @@ import bluesky.preprocessors as bpp
 import socket
 import time
 
-HOST = '192.168.2.196'    # The remote host
-PORT = 9001              # The same port as used by the server
-s_maia=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s_maia.connect((HOST, PORT))
-def maia_set(var, val):
-    putstr = "x set "+var+" "+str(val)+"\n"
-    s_maia.sendall(putstr.encode())
-    time.sleep(0.01)
-    r = s_maia.recv(1024)
+#HOST = '192.168.2.196'    # The remote host
+#PORT = 9001              # The same port as used by the server
+#s_maia=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+#s_maia.connect((HOST, PORT))
+#def maia_set(var, val):
+#    putstr = "x set "+var+" "+str(val)+"\n"
+#    s_maia.sendall(putstr.encode())
+#    time.sleep(0.01)
+#    r = s_maia.recv(1024)
     #print(r)
-    r1=r.decode()
-    r2=r1.rsplit(" ")
-    if (r2[1] == "error"):
-      print("Return string : ", r)
+#    r1=r.decode()
+#    r2=r1.rsplit(" ")
+#    if (r2[1] == "error"):
+#      print("Return string : ", r)
 
-def maia_get(var):
-    putstr = "x get "+var+"\n"
-    s_maia.sendall(putstr.encode())
-    time.sleep(0.01)
-    r = s_maia.recv(1024)
-    r1=r.decode()
-    r2=r1.rsplit(" ")
-    if (r2[1] == "error"):
-      print("Return string : ", r)     
-    val = r2[2]
+#def maia_get(var):
+#    putstr = "x get "+var+"\n"
+#    s_maia.sendall(putstr.encode())
+#    time.sleep(0.01)
+#    r = s_maia.recv(1024)
+#    r1=r.decode()
+#    r2=r1.rsplit(" ")
+#    if (r2[1] == "error"):
+#      print("Return string : ", r)     
+#    val = r2[2]
     #print(val)
-    return(val)
+#    return(val)
 
 def xscan(start, stop, step, dwell):
-    mres=0.00078125
+    mres=0.0002
     nxpitch=int(step/mres)
     if(nxpitch<3): # Force minimum pitch to 3 motor steps
         nxpitch=3
@@ -56,7 +59,7 @@ def xscan(start, stop, step, dwell):
     xsize = xnum*step
     stop=start+xsize
     print("Warning: I am forcing xsize to be an integer multiple of step: ", xsize);
-    fout=open('/home/xf04bm/xpos.dat','w')
+    #fout=open('/home/xf04bm/xpos.dat','w')
     # set the motors to the right speed
     yield from bps.mv(M.x.velocity, speed)
     print("set speed")
@@ -68,13 +71,13 @@ def xscan(start, stop, step, dwell):
         pos=start+i*step
         yield from bps.mv(M.x, pos)
         yield from bps.sleep(0.2)
-        a_x=str(maia_get("encoder.axis[0].position\n"))
-        fout.write(str(i)+"  "+str(M.x.position)+"   "+a_x[0:len(a_x)-1]+"\n")
-    fout.close()
+    #    a_x=str(maia_get("encoder.axis[0].position\n"))
+    #    fout.write(str(i)+"  "+str(M.x.position)+"   "+a_x[0:len(a_x)-1]+"\n")
+    #fout.close()
     yield from bps.mv(M.x, start)
 
 def yscan(start, stop, step, dwell):
-    mres=0.00078125
+    mres=0.0002
     nxpitch=int(step/mres)
     if(nxpitch<3): # Force minimum pitch to 3 motor steps
         nxpitch=3
@@ -93,7 +96,7 @@ def yscan(start, stop, step, dwell):
     xsize = xnum*step
     stop=start+sign*xsize
     print("Warning: I am forcing size to be an integer multiple of step: ", xsize);
-    fout=open('/home/xf04bm/ypos.dat','w')
+    #fout=open('/home/xf04bm/ypos.dat','w')
     # set the motors to the right speed
     yield from bps.mv(M.y.velocity, speed)
     print("set speed")
@@ -105,9 +108,9 @@ def yscan(start, stop, step, dwell):
         pos=start+i*sign*step
         yield from bps.mv(M.y, pos)
         yield from bps.sleep(0.2)
-        a_x=str(maia_get("encoder.axis[1].position\n"))
-        fout.write(str(i)+"  "+str(M.y.position)+"   "+a_x[0:len(a_x)-1]+"\n")
-    fout.close()
+    #    a_x=str(maia_get("encoder.axis[1].position\n"))
+    #    fout.write(str(i)+"  "+str(M.y.position)+"   "+a_x[0:len(a_x)-1]+"\n")
+    #fout.close()
     yield from bps.mv(M.y, start)
 
 sample_md = {"sample": {"name": "Ni mesh", "owner": "stolen"}}
@@ -131,7 +134,7 @@ def fly_maia(
     """Run a flyscan with the maia
 
 
-    Parameters
+    Parametersprint("open run")
     ----------
     ystart, ystop, ypitch : float
         The start position, end position and pixel pitch of the scan along the slow direction in absolute mm.
@@ -147,7 +150,7 @@ def fly_maia(
 
     md : dict, optional
         Metadata to put into the start document.
-
+print("open run")
         If there is a 'sample' key, then it must be a dictionary and the
         keys
 
@@ -162,13 +165,13 @@ def fly_maia(
 
         are passed through to maia metadata.
     """
-    x_mres=0.00078125
-    y_mres=0.00025
+    x_mres=0.0002
+    y_mres=0.0002
     nxpitch=int(xpitch/x_mres)
-    if(nxpitch<2): # Force minimum pitch to 3 motor steps
+    if(nxpitch<2): # Force minimum pitch to 2 motor steps
         nxpitch=2
     nypitch=int(ypitch/y_mres)
-    if(nypitch<2): # Force minimum pitch to 3 motor steps
+    if(nypitch<2): # Force minimum pitch to 2 motor steps
         nypitch=2
     xpitch=nxpitch*x_mres
     print("Warning: I am forcing xpitch to be an integer multiple of motor resolution: ", xpitch);
@@ -189,18 +192,20 @@ def fly_maia(
     if(xstart+xnum*xpitch < xstop):
       xnum+=1
 
-    xsize = xnum*(xpitch)
+    xsize = xnum*xpitch
     xstop=xstart+xsize
+    ysize=ystart*xpitch
+    ystop=ystart+ysize
+
     print("Warning: I am forcing xsize to be an integer multiple of xpitch: ", xsize);
 
-    if(ystart+ynum*ypitch < ystop):
-      ynum+=1
+    #if(ystart+ynum*ypitch < ystop):       #        yield from bps.sleep(0.5)
+        #        a_x=str(maia_get("encoder.axis[0].position\n"))
+        #       a_y=str(maia_get("encoder.axis[1].position\n"))
+        #        fout.write(str(i)+"  "+str(hf_stage.x.position)+"   "+a_x[0:len(a_x)-1]+"   "+str(hf_stage.y.position)+"   "+a_y[0:len(a_y)-1]+"\n")
+                #fout.write(str(i)+"  "+str(hf_stage.x.position)+"   "+str(maia.enc_axis_0_pos_mon.value.get())+"   "+str(hf_stage.y.position)+"   "+str(maia.enc_axis_1_pos_mon.value.get())+"\n")
+        #fout.close()
 
-    ysize = ynum*(ypitch)
-    ystop=ystart+ysize
-    print("Warning: I am forcing ysize to be an integer multiple of ypitch: ", ysize);
-
-# shutter = shut_b
     md = md or {}
     _md = {
         "detectors": ["maia"],
@@ -209,7 +214,7 @@ def fly_maia(
         "num_steps": xnum * ynum,
         "plan_args": dict(
             ystart=ystart,
-            ystop=ystart+ysize,
+            ystop=ystop,
             ynum=ynum,
             xstart=xstart,
             xstop=xstart+xsize,
@@ -261,6 +266,7 @@ def fly_maia(
     x_val = yield from bps.rd(hf_stage.x)
     y_val = yield from bps.rd(hf_stage.y)
     # TODO, depends on actual device
+    # Tell Hymod what we're doing
     yield from bps.mv(maia.enc_axis_0_pos_sp.value, x_val)
     yield from bps.mv(maia.enc_axis_1_pos_sp.value, y_val)
 
@@ -299,10 +305,10 @@ def fly_maia(
         yield from bps.mv(hf_stage.x, xstart)
         yield from bps.sleep(1.0)
         yield from bps.mv(hf_stage.y, ystart)
-        input("Press any key if it's OK to continue")
+        #input("Press enter if it's OK to continue")
         print("done outline")
         # open file to save positions
-        fout=open('/home/xf04bm/positions.dat','w')
+        #fout=open('/home/xf04bm/positions.dat','w')
 	    # set the motors to the right speed
         yield from bps.mv(hf_stage.x.velocity, spd_x)
         print("set speed")
@@ -314,49 +320,39 @@ def fly_maia(
         # long int here.  consequneces of changing?
         #    yield from bps.mv(maia.scan_number_sp,start_uid)
         yield from bps.stage(maia)  # currently a no-op
-	    #take up backlash
-        yield from bps.mv(hf_stage.x, xstart-1.0)
-        yield from bps.mv(hf_stage.x, xstart)
-        yield from bps.mv(hf_stage.y, ystart-1.0)
-        yield from bps.mv(hf_stage.y, ystart)
-
+        print("Stage maia")
+        xstartnew=xstart-xpitch/2
+        xstopnew=xstop+xpitch/2
+        ystartnew=ystart #-ypitch/2
+        ystopnew=ystop #+ypitch/2
+        ynumnew=ynum+1
+        #take up backlash
+        yield from bps.mv(hf_stage.x, xstartnew-1.0)
+        yield from bps.mv(hf_stage.x, xstartnew)
+        yield from bps.mv(hf_stage.y, ystartnew-1.0)
+        yield from bps.mv(hf_stage.y, ystartnew)
+        print("Backlash removed")
         yield from bps.kickoff(maia, wait=True)
         print("kickoff")
         yield from bps.checkpoint()
         print("checkpoint")
-        yield from bps.mv(hf_stage.x, xstart)
-        yield from bps.mv(hf_stage.y, ystart)
-        yield from bps.sleep(0.2)
+        #yield from bps.mv(hf_stage.x, xstart)
+        #yield from bps.mv(hf_stage.y, ystart)
+        #yield from bps.sleep(0.2)
         # by row
-        for i in range(0,ynum):
-            y_pos=ystart+i*ypitch
+        for i in range(0,ynumnew):
+            y_pos=ystartnew+i*ypitch
             
-            yield from bps.checkpoint()
+            #yield from bps.checkpoint()
             # move to the row we want
             yield from bps.mv(hf_stage.y, y_pos)
-        #    yield from bps.sleep(0.5)
-            a_x=str(maia_get("encoder.axis[0].position\n"))
-            a_y=str(maia_get("encoder.axis[1].position\n"))
-            print("ypos=",y_pos,"ypixel=",i, a_x[0:len(a_x)-1], a_y)
-            #fout.write("%i %g %g %g %g/n",i,hf_stage.x.get(),maia.enc_axis_0_pos_sp.value.get(),hf_stage.y.get(),maia.enc_axis_1_pos_sp.value.get())
             if i % 2:
-                # for odd-rows move from start to stop
-                yield from bps.mv(hf_stage.x, xstop)
-        #        yield from bps.sleep(0.5)
-                a_x=str(maia_get("encoder.axis[0].position\n"))
-                a_y=str(maia_get("encoder.axis[1].position\n"))
-                fout.write(str(i)+"  "+str(hf_stage.x.position)+"   "+a_x[0:len(a_x)-1]+"   "+str(hf_stage.y.position)+"   "+a_y[0:len(a_y)-1]+"\n")
-                #maia.enc_axis_0_pos_mon.value.get())+"   "+str(hf_stage.y.position)+"   "+str(maia.enc_axis_1_pos_mon.value.get())+"\n")
+                # for odd-rows move from stop to start
+                yield from bps.mv(hf_stage.x, xstartnew)
             else:
-                # for even-rows move from stop to start
-                yield from bps.mv(hf_stage.x, xstart)
-        #        yield from bps.sleep(0.5)
-                a_x=str(maia_get("encoder.axis[0].position\n"))
-                a_y=str(maia_get("encoder.axis[1].position\n"))
-                fout.write(str(i)+"  "+str(hf_stage.x.position)+"   "+a_x[0:len(a_x)-1]+"   "+str(hf_stage.y.position)+"   "+a_y[0:len(a_y)-1]+"\n")
-                #fout.write(str(i)+"  "+str(hf_stage.x.position)+"   "+str(maia.enc_axis_0_pos_mon.value.get())+"   "+str(hf_stage.y.position)+"   "+str(maia.enc_axis_1_pos_mon.value.get())+"\n")
-        fout.close()
-
+                # for even-rows move from start to stop
+                yield from bps.mv(hf_stage.x, xstopnew)
+ 
     def _cleanup_plan():
         # stop the maia ("I'll wait until you're done")
         yield from bps.complete(maia, wait=True)
