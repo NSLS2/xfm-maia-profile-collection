@@ -127,9 +127,10 @@ def fly_maia(
     *,
     group=None,
     md=None,
-    # shut_b,
+    shutter = shutter,
     hf_stage,
     maia,
+    print_params=False
 ):
     """Run a flyscan with the maia
 
@@ -165,6 +166,8 @@ print("open run")
 
         are passed through to maia metadata.
     """
+    if print_params:
+        print(f"ystart={ystart}, ystop={ystop}, ypitch={ypitch}, xstart={xstart}, xstop={xstop}, xpitch={xpitch}, dwell={dwell}")
     x_mres=0.0002
     y_mres=0.0002
     nxpitch=int(xpitch/x_mres)
@@ -303,7 +306,7 @@ print("open run")
         yield from bps.mv(hf_stage.y, ystop)
         yield from bps.sleep(1.0)
         yield from bps.mv(hf_stage.x, xstart)
-        yield from bps.sleep(1.0)
+        #yield from bps.sleep(1.0)
         yield from bps.mv(hf_stage.y, ystart)
         #input("Press enter if it's OK to continue")
         print("done outline")
@@ -312,9 +315,10 @@ print("open run")
 	    # set the motors to the right speed
         yield from bps.mv(hf_stage.x.velocity, spd_x)
         print("set speed")
-        #yield from bps.mv(shutter, "Open")
-        #yield from bps.sleep(1)
+        yield from bps.mv(shutter, "Open")
+#        yield from bps.sleep(1)
         start_uid = yield from bps.open_run(md)
+        yield from bps.sleep(2)
         print("open run")
         yield from bps.mv(maia.meta_val_scan_crossref_sp.value, start_uid)
         # long int here.  consequneces of changing?
@@ -332,13 +336,14 @@ print("open run")
         yield from bps.mv(hf_stage.y, ystartnew-1.0)
         yield from bps.mv(hf_stage.y, ystartnew)
         print("Backlash removed")
+        #yield from bps.sleep(1)
         yield from bps.kickoff(maia, wait=True)
         print("kickoff")
         yield from bps.checkpoint()
         print("checkpoint")
         #yield from bps.mv(hf_stage.x, xstart)
         #yield from bps.mv(hf_stage.y, ystart)
-        #yield from bps.sleep(0.2)
+        yield from bps.sleep(2)
         # by row
         for i in range(0,ynumnew):
             y_pos=ystartnew+i*ypitch
@@ -363,8 +368,8 @@ print("open run")
         yield from bps.mv(hf_stage.y, ystart-1.0)
         yield from bps.mv(hf_stage.y, ystart)
         # shut the shutter
-        #yield from bps.mv(shutter, "Close")
-        #yield from bps.sleep(1)
+        yield from bps.mv(shutter, "Close")
+        yield from bps.sleep(2)
         # collect data from maia
         yield from bps.collect(maia)
         yield from bps.close_run()
@@ -381,6 +386,7 @@ print("open run")
         yield from bps.mv(maia.meta_val_beam_energy_sp.value, "")
         yield from bps.mv(maia.meta_val_scan_dwell.value, "")
         yield from bps.mv(maia.meta_val_scan_order_sp.value, "")
+        yield from bps.sleep(2)
 
     return (yield from bpp.finalize_wrapper(_raster_plan(), _cleanup_plan()))
 
@@ -399,7 +405,7 @@ def fly_maia_finger_sync(
     shut_b,
     hf_stage,
 ):
-    shutter = shut_b
+#    shutter = shutter
     md = md or {}
     _md = {
         "detectors": ["maia"],
@@ -445,7 +451,7 @@ def fly_maia_finger_sync(
         # set the motors to the right speed
         yield from bps.mv(hf_stage.x.velocity, spd_x)
 
-        yield from bps.mv(shutter, "Open")
+#        yield from bps.mv(shutter, "Open")
         yield from bps.open_run(md)
 
         yield from bps.checkpoint()
@@ -463,7 +469,7 @@ def fly_maia_finger_sync(
 
     def _cleanup_plan():
         # shut the shutter
-        yield from bps.mv(shutter, "Close")
+#        yield from bps.mv(shutter, "Close")
         yield from bps.mv(hf_stage.x, xstart)
         yield from bps.mv(hf_stage.y, ystart)
         yield from bps.close_run()
