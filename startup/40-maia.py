@@ -1,17 +1,14 @@
-#from ophyd.log import config_ophyd_logging
 #config_ophyd_logging(level='DEBUG')
 from nslsii.detectors.maia import MAIA
 
-
 maia = MAIA('XFM:MAIA', name='maia')
-
 import numpy as np
 
 import bluesky.plans as bp
 import bluesky.plan_stubs as bps
 import bluesky.preprocessors as bpp
 import socket
-import time
+#import time
 
 #HOST = '192.168.2.196'    # The remote host
 #PORT = 9001              # The same port as used by the server
