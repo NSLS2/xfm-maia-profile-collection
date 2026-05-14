@@ -7,7 +7,7 @@ import builtins
 nslsii.configure_base(
   get_ipython().user_ns, 
   'xfm',
-  publish_documents_with_kafka=True
+  publish_documents_with_kafka=False
 
   )
 import redis
@@ -16,9 +16,10 @@ from redis_json_dict import RedisJSONDict
 uri = "info.xfm.nsls2.bnl.gov"
 # Provide an endstation prefix, if needed, with a trailing "-"
 new_md = RedisJSONDict(redis.Redis(uri), prefix="maia")
+current_cycle = "2026-1"
 #BEAMLINE_ID = 'xfm'
 
-nslsii.configure_olog(get_ipython().user_ns)
+#nslsii.configure_olog(get_ipython().user_ns)
 
 #Optional: set any metadata that rarely changes.
 #RE.md['beamline_id'] = 'XFM'

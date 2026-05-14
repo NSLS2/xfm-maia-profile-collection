@@ -1,5 +1,4 @@
 from ophyd import EpicsMotor, Device, Component as Cpt
-
 #class Stage(Device):
 #    x    = Cpt(EpicsMotor, '{UTS:1-Ax:X}Mtr')
 #    y    = Cpt(EpicsMotor, '{UTS:1-Ax:Y}Mtr')
