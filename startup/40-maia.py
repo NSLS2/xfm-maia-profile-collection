@@ -67,7 +67,7 @@ def xscan(start, stop, step, dwell):
     for i in range(0,xnum):
         pos=start+i*step
         yield from bps.mv(M.x, pos)
-        yield from bps.sleep(0.2)
+        yield from bps.sleep(0.05)
     #    a_x=str(maia_get("encoder.axis[0].position\n"))
     #    fout.write(str(i)+"  "+str(M.x.position)+"   "+a_x[0:len(a_x)-1]+"\n")
     #fout.close()
@@ -104,7 +104,7 @@ def yscan(start, stop, step, dwell):
     for i in range(0,xnum):
         pos=start+i*sign*step
         yield from bps.mv(M.y, pos)
-        yield from bps.sleep(0.2)
+        yield from bps.sleep(0.05)
     #    a_x=str(maia_get("encoder.axis[1].position\n"))
     #    fout.write(str(i)+"  "+str(M.y.position)+"   "+a_x[0:len(a_x)-1]+"\n")
     #fout.close()
@@ -124,13 +124,12 @@ def fly_maia(
     *,
     group=None,
     md=None,
-    shutter = shutter,
+###    shutter = shutter,
     hf_stage,
     maia,
     print_params=False
 ):
     """Run a flyscan with the maia
-
 
     Parametersprint("open run")
     ----------
@@ -246,27 +245,21 @@ print("open run")
     if group is not None:
         yield from bps.mv(maia.blog_group_next_sp.value, group)
 
-    #if xstart > xstop:
-    #    xstop, xstart = xstart, xstop
+    ### Get initial X and Y positions before scan
+    x_init = yield from bps.rd(hf_stage.x)
+    y_init = yield from bps.rd(hf_stage.y)
 
-    #if ystart > ystop:
-    #    ystop, ystart = ystart, ystop
-
-    # Pitch must match what raster driver uses for pitch ...
-    #x_pitch = abs(xstop - xstart) / (xnum - 1)
-    #y_pitch = abs(ystop - ystart) / (ynum - 1)
-
-    # TODO compute this based on someting
+    # Compute fast motor speed and print
     spd_x = xpitch / dwell
     print("speed_x=",spd_x)
 
     # Move to bottom LH corner of scan
-    yield from bps.mv(hf_stage.x, xstart, hf_stage.y, ystart)
+###    yield from bps.mv(hf_stage.x, xstart, hf_stage.y, ystart)
 
+    # Tell Hymod what we're doing
     x_val = yield from bps.rd(hf_stage.x)
     y_val = yield from bps.rd(hf_stage.y)
-    # TODO, depends on actual device
-    # Tell Hymod what we're doing
+
     yield from bps.mv(maia.enc_axis_0_pos_sp.value, x_val)
     yield from bps.mv(maia.enc_axis_1_pos_sp.value, y_val)
 
@@ -287,85 +280,107 @@ print("open run")
     yield from bps.mv(
         maia.meta_val_beam_energy_sp.value, "{:.2f}".format(20_000)
         )
-    #    yield from bps.mv(maia.maia_scan_info
-    # need something to generate a filename here.
-    #    yield from bps.mv(maia.blog_group_next_sp,datafile))
-    # start blog in kickoff?
 
     @bpp.reset_positions_decorator([hf_stage.x.velocity])
     def _raster_plan():
-        print("mark scan outline")
-        yield from bps.mv(hf_stage.x, xstart)
-        yield from bps.mv(hf_stage.y, ystart)
-        yield from bps.sleep(1.0)
-        yield from bps.mv(hf_stage.x, xstop)
-        yield from bps.sleep(1.0)
-        yield from bps.mv(hf_stage.y, ystop)
-        yield from bps.sleep(1.0)
-        yield from bps.mv(hf_stage.x, xstart)
-        #yield from bps.sleep(1.0)
-        yield from bps.mv(hf_stage.y, ystart)
+        ## Get initial X and Y positions before scan
+        x_init = yield from bps.rd(hf_stage.x)
+        y_init = yield from bps.rd(hf_stage.y)
+###        print("mark scan outline")
+##        yield from bps.mv(hf_stage.x, xstart)
+##        yield from bps.mv(hf_stage.y, ystart)
+##        yield from bps.sleep(1.0)
+##        yield from bps.mv(hf_stage.x, xstop)
+##        yield from bps.sleep(1.0)
+##        yield from bps.mv(hf_stage.y, ystop)
+##        yield from bps.sleep(1.0)
+##        print("done outline")
         #input("Press enter if it's OK to continue")
-        print("done outline")
         # open file to save positions
         #fout=open('/home/xf04bm/positions.dat','w')
-	    # set the motors to the right speed
-        yield from bps.mv(hf_stage.x.velocity, spd_x)
-        print("set speed")
-        yield from bps.mv(shutter, "Open")
-#        yield from bps.sleep(1)
-        start_uid = yield from bps.open_run(md)
-        yield from bps.sleep(2)
-        print("open run")
-        yield from bps.mv(maia.meta_val_scan_crossref_sp.value, start_uid)
-        # long int here.  consequneces of changing?
-        #    yield from bps.mv(maia.scan_number_sp,start_uid)
-        yield from bps.stage(maia)  # currently a no-op
-        print("Stage maia")
+	# set to center of each pixel
         xstartnew=xstart-xpitch/2
         xstopnew=xstop+xpitch/2
         ystartnew=ystart #-ypitch/2
         ystopnew=ystop #+ypitch/2
         ynumnew=ynum+1
-        #take up backlash
-        yield from bps.mv(hf_stage.x, xstartnew-1.0)
+        ###take up backlash
+##        yield from bps.mv(hf_stage.x, xstartnew-1.0)
+##        yield from bps.mv(hf_stage.x, xstartnew)
+##        yield from bps.mv(hf_stage.y, ystartnew-1.0)
+##        yield from bps.mv(hf_stage.y, ystartnew)
+##        print("Backlash removed")
+###        yield from bps.mv(shutter, "Open")
+###        yield from bps.sleep(1)
+###        print("shutter open")
+##      move to new start positions then set X spd for scan
         yield from bps.mv(hf_stage.x, xstartnew)
-        yield from bps.mv(hf_stage.y, ystartnew-1.0)
         yield from bps.mv(hf_stage.y, ystartnew)
-        print("Backlash removed")
-        #yield from bps.sleep(1)
+        yield from bps.sleep(0.1)
+        yield from bps.mv(hf_stage.x.velocity, spd_x)
+        yield from bps.sleep(0.1)
+        print("set speed")
+        #stage MAIA
+        yield from bps.stage(maia)
+        yield from bps.sleep(1.0)
+        print("stage maia")
+        #start uid (long wait)
+        print("open run")
+        start_uid = yield from bps.open_run(md)
+        yield from bps.sleep(1.0)
+        yield from bps.mv(maia.meta_val_scan_crossref_sp.value, start_uid)
+        yield from bps.sleep(5.0)
+        #kickoff
         yield from bps.kickoff(maia, wait=True)
+        yield from bps.sleep(1.0)
         print("kickoff")
-        yield from bps.checkpoint()
-        print("checkpoint")
-        #yield from bps.mv(hf_stage.x, xstart)
-        #yield from bps.mv(hf_stage.y, ystart)
-        yield from bps.sleep(2)
-        # by row
+##        yield from bps.checkpoint()
+##        print("checkpoint")
+
+        # SCAN LOOP by row
         for i in range(0,ynumnew):
-            y_pos=ystartnew+i*ypitch
-            
-            #yield from bps.checkpoint()
+            y_pos=ystartnew+i*ypitch            
+##            yield from bps.checkpoint()
             # move to the row we want
             yield from bps.mv(hf_stage.y, y_pos)
+##            time.sleep(0.05)
+##            yield from bps.sleep(0.05)
+            ### Stu's kludge to minimize image 'tilt' that appeared May 2025.
+            # Force HyMod to match the settled motor positions at the row boundary.
+            # This reuses the same sync method as the initial scan sync.
+            x_val = yield from bps.rd(hf_stage.x)
+            print(x_val)
+###            y_val = yield from bps.rd(hf_stage.y)
+            yield from bps.mv(maia.enc_axis_0_pos_sp.value, x_val)
+###            yield from bps.mv(maia.enc_axis_1_pos_sp.value, y_val)
+            yield from bps.sleep(0.05)
+
             if i % 2:
                 # for odd-rows move from stop to start
                 yield from bps.mv(hf_stage.x, xstartnew)
+##                time.sleep(0.05)
+                yield from bps.sleep(0.05)
             else:
                 # for even-rows move from start to stop
                 yield from bps.mv(hf_stage.x, xstopnew)
+##                time.sleep(0.05)
+                yield from bps.sleep(0.05)
  
     def _cleanup_plan():
         # stop the maia ("I'll wait until you're done")
         yield from bps.complete(maia, wait=True)
-        
-        # return stage to scan origin
-        yield from bps.mv(hf_stage.x, xstart-1.0)
-        yield from bps.mv(hf_stage.x, xstart)
-        yield from bps.mv(hf_stage.y, ystart-1.0)
-        yield from bps.mv(hf_stage.y, ystart)
+        yield from bps.sleep(2)       
+        # return stage to scan origin (##RVT or to initial pos)
+##        yield from bps.mv(hf_stage.x, xstart-1.0)
+##        yield from bps.mv(hf_stage.x, xstart)
+##        yield from bps.mv(hf_stage.y, ystart-1.0)
+##        yield from bps.mv(hf_stage.y, ystart)
+        yield from bps.mv(hf_stage.x.velocity, 5.0)
+        yield from bps.mv(hf_stage.x, x_init)
+        yield from bps.mv(hf_stage.y.velocity, 5.0)
+        yield from bps.mv(hf_stage.y, y_init)
         # shut the shutter
-        yield from bps.mv(shutter, "Close")
+###        yield from bps.mv(shutter, "Close")
         yield from bps.sleep(2)
         # collect data from maia
         yield from bps.collect(maia)
@@ -387,88 +402,3 @@ print("open run")
 
     return (yield from bpp.finalize_wrapper(_raster_plan(), _cleanup_plan()))
 
-
-def fly_maia_finger_sync(
-    ystart,
-    ystop,
-    ynum,
-    xstart,
-    xstop,
-    xnum,
-    dwell,
-    *,
-    group=None,
-    md=None,
-    shut_b,
-    hf_stage,
-):
-#    shutter = shutter
-    md = md or {}
-    _md = {
-        "detectors": ["maia"],
-        "shape": [ynum, xnum],
-        "motors": [m.name for m in [hf_stage.y, hf_stage.x]],
-        "num_steps": xnum * ynum,
-        "plan_args": dict(
-            ystart=ystart,
-            ystop=ystop,
-            ynum=ynum,
-            xstart=xstart,
-            xstop=xstop,
-            xnum=xnum,
-            dwell=dwell,
-            group=repr(group),
-            md=md,
-        ),
-        "extents": [[ystart, ystop], [xstart, xstop]],
-        "snaking": [False, True],
-        "plan_name": "fly_maia",
-    }
-    _md.update(md)
-
-    md = _md
-
-    if xstart > xstop:
-        xstop, xstart = xstart, xstop
-
-    if ystart > ystop:
-        ystop, ystart = ystart, ystop
-
-    # Pitch must match what raster driver uses for pitch ...
-    x_pitch = abs(xstop - xstart) / (xnum - 1)
-
-    # TODO compute this based on someting
-    spd_x = x_pitch / dwell
-
-    yield from bps.mv(hf_stage.x, xstart, hf_stage.y, ystart)
-
-    @bpp.reset_positions_decorator([hf_stage.x.velocity])
-    def _raster_plan():
-
-        # set the motors to the right speed
-        yield from bps.mv(hf_stage.x.velocity, spd_x)
-
-#        yield from bps.mv(shutter, "Open")
-        yield from bps.open_run(md)
-
-        yield from bps.checkpoint()
-        # by row
-        for i, y_pos in enumerate(np.linspace(ystart, ystop, ynum)):
-            yield from bps.checkpoint()
-            # move to the row we want
-            yield from bps.mv(hf_stage.y, y_pos)
-            if i % 2:
-                # for odd-rows move from start to stop
-                yield from bps.mv(hf_stage.x, xstop)
-            else:
-                # for even-rows move from stop to start
-                yield from bps.mv(hf_stage.x, xstart)
-
-    def _cleanup_plan():
-        # shut the shutter
-#        yield from bps.mv(shutter, "Close")
-        yield from bps.mv(hf_stage.x, xstart)
-        yield from bps.mv(hf_stage.y, ystart)
-        yield from bps.close_run()
-
-    return (yield from bpp.finalize_wrapper(_raster_plan(), _cleanup_plan()))

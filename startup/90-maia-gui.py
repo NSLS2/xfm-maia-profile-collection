@@ -894,11 +894,11 @@ class MAIAGUIMainWindow(QtWidgets.QMainWindow):
         fileMenu = QtWidgets.QMenu("&File", self)
         menuBar.addMenu(fileMenu)
         # Adding actions to the File menu
-        openAction = QtWidgets.QAction("&Open Excel Plan", self)
+        openAction = QtGui.QAction("&Open Excel Plan", self)
         fileMenu.addAction(openAction)
         openAction.triggered.connect(self.import_excel_plan)
 
-        exitAction = QtWidgets.QAction("&Exit", self)
+        exitAction = QtGui.QAction("&Exit", self)
         exitAction.triggered.connect(self.close)  # Connect to close the application
         fileMenu.addAction(exitAction)
 
