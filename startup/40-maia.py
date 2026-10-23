@@ -254,7 +254,7 @@ print("open run")
     print("speed_x=",spd_x)
 
     # Move to bottom LH corner of scan
-###    yield from bps.mv(hf_stage.x, xstart, hf_stage.y, ystart)
+##    yield from bps.mv(hf_stage.x, xstart, hf_stage.y, ystart)
 
     # Tell Hymod what we're doing
     x_val = yield from bps.rd(hf_stage.x)
@@ -286,16 +286,6 @@ print("open run")
         ## Get initial X and Y positions before scan
         x_init = yield from bps.rd(hf_stage.x)
         y_init = yield from bps.rd(hf_stage.y)
-###        print("mark scan outline")
-##        yield from bps.mv(hf_stage.x, xstart)
-##        yield from bps.mv(hf_stage.y, ystart)
-##        yield from bps.sleep(1.0)
-##        yield from bps.mv(hf_stage.x, xstop)
-##        yield from bps.sleep(1.0)
-##        yield from bps.mv(hf_stage.y, ystop)
-##        yield from bps.sleep(1.0)
-##        print("done outline")
-        #input("Press enter if it's OK to continue")
         # open file to save positions
         #fout=open('/home/xf04bm/positions.dat','w')
 	# set to center of each pixel
@@ -304,33 +294,47 @@ print("open run")
         ystartnew=ystart #-ypitch/2
         ystopnew=ystop #+ypitch/2
         ynumnew=ynum+1
+        yield from bps.sleep(0.1)
         ###take up backlash
 ##        yield from bps.mv(hf_stage.x, xstartnew-1.0)
 ##        yield from bps.mv(hf_stage.x, xstartnew)
 ##        yield from bps.mv(hf_stage.y, ystartnew-1.0)
 ##        yield from bps.mv(hf_stage.y, ystartnew)
 ##        print("Backlash removed")
-###        yield from bps.mv(shutter, "Open")
-###        yield from bps.sleep(1)
-###        print("shutter open")
-##      move to new start positions then set X spd for scan
+        ##move to new start positions
         yield from bps.mv(hf_stage.x, xstartnew)
         yield from bps.mv(hf_stage.y, ystartnew)
-        yield from bps.sleep(0.1)
+        yield from bps.sleep(1.0)
+        ##mark scan outline new
+        print("mark scan outline")
+        yield from bps.mv(hf_stage.x, xstopnew)
+        yield from bps.sleep(1.0)
+        yield from bps.mv(hf_stage.y, ystopnew)
+        yield from bps.sleep(1.0)
+        yield from bps.mv(hf_stage.x, xstartnew)
+        yield from bps.sleep(1.0)
+        yield from bps.mv(hf_stage.y, ystartnew)
+        print("done outline")
+        #input("Press enter if it's OK to continue")
+        ##set X spd for scan
         yield from bps.mv(hf_stage.x.velocity, spd_x)
-        yield from bps.sleep(0.1)
+        yield from bps.sleep(1.0)
         print("set speed")
-        #stage MAIA
+        ##stage MAIA
         yield from bps.stage(maia)
         yield from bps.sleep(1.0)
         print("stage maia")
-        #start uid (long wait)
-        print("open run")
+        ##start uid (long wait)
         start_uid = yield from bps.open_run(md)
         yield from bps.sleep(1.0)
         yield from bps.mv(maia.meta_val_scan_crossref_sp.value, start_uid)
         yield from bps.sleep(5.0)
-        #kickoff
+        print("open run")
+        ###open Shutter
+###        yield from bps.mv(shutter, "Open")
+##        yield from bps.sleep(1)
+##        print("shutter open")
+        ##kickoff MAIA
         yield from bps.kickoff(maia, wait=True)
         yield from bps.sleep(1.0)
         print("kickoff")
@@ -349,7 +353,7 @@ print("open run")
             # Force HyMod to match the settled motor positions at the row boundary.
             # This reuses the same sync method as the initial scan sync.
             x_val = yield from bps.rd(hf_stage.x)
-            print(x_val)
+###            print(x_val)
 ###            y_val = yield from bps.rd(hf_stage.y)
             yield from bps.mv(maia.enc_axis_0_pos_sp.value, x_val)
 ###            yield from bps.mv(maia.enc_axis_1_pos_sp.value, y_val)
@@ -379,7 +383,7 @@ print("open run")
         yield from bps.mv(hf_stage.x, x_init)
         yield from bps.mv(hf_stage.y.velocity, 5.0)
         yield from bps.mv(hf_stage.y, y_init)
-        # shut the shutter
+        ### shut the shutter
 ###        yield from bps.mv(shutter, "Close")
         yield from bps.sleep(2)
         # collect data from maia

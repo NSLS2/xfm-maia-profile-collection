@@ -2,17 +2,28 @@ from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from typing import Optional
 from collections import defaultdict
+from pathlib import Path
+import json
+import requests
 
 import bluesky.plan_stubs as bps
 import pandas as pd
-from bluesky.utils import install_qt_kicker, RunEngineInterrupted
+from bluesky.utils import RunEngineInterrupted
 
-install_qt_kicker()
-# from qtpy import QtCore, QtGui, QtWidgets
-from matplotlib.backends.qt_compat import QtCore, QtGui, QtWidgets
-from matplotlib.backends.backend_qt5 import _create_qApp
+# install_qt_kicker()
+from qtpy import QtCore, QtGui, QtWidgets
+# from matplotlib.backends.qt_compat import QtCore, QtGui, QtWidgets
+# from matplotlib.backends.backend_qt5 import _create_qApp
+import qtpy
+# if qtpy.PYSIDE6:
+#    from PySide6 import QtCore, QtWidgets, QtGui
+
+
 from qmicroscope.microscope import Microscope
 from qmicroscope.plugins import CrossHairPlugin
+
+resp = requests.get("https://api.nsls2.bnl.gov/v1/facility/nsls2/cycles/current") 
+current_cycle = resp.json()["cycle"]
 
 def show_error_message(error_text="Error occured", error_title="Error"):
     msg = QtWidgets.QMessageBox()
@@ -55,6 +66,7 @@ class MaiaFlyDefinition:
     name: str = ""
     md: "Optional[SampleMetadata | ScanMetadata]" = None
     maia_scan_number: "Optional[int]" = None
+    bluesky_run_id: "Optional[UUID]" = None
     path: str = ""
 
 
@@ -73,8 +85,12 @@ class QueueItem:
 
 
 class QueueModel:
-    def __init__(self, update_duplicate_item=True):
-        self.queue: list[QueueItem] = []
+    def __init__(self, queue=None, update_duplicate_item=True):
+        if queue is None:
+            self.queue: list[QueueItem] = []
+        else:
+            self.queue: list[QueueItem] = queue
+        
         self.update_duplicate_item = update_duplicate_item
 
     def add_item(self, item):
@@ -102,6 +118,10 @@ class QueueModel:
         if 0 <= index < len(self.queue):
             del self.queue[index]
 
+    def remove_all_items(self):
+        self.queue = []
+
+
     def move_item_up(self, index):
         if 1 <= index < len(self.queue):
             self.queue[index - 1], self.queue[index] = (
@@ -125,8 +145,9 @@ class QueueWidget(QtWidgets.QWidget):
 
     def __init__(self, update_duplicate_item=True):
         super().__init__()
-        self.model = QueueModel(update_duplicate_item)
+        self.model = QueueModel(queue=self.load_list(), update_duplicate_item=update_duplicate_item)
         self.init_ui()
+        self.update_list()
 
     def init_ui(self):
         self.setLayout(QtWidgets.QVBoxLayout())
@@ -141,6 +162,10 @@ class QueueWidget(QtWidgets.QWidget):
         self.remove_button = QtWidgets.QPushButton("Remove Item")
         self.remove_button.clicked.connect(self.remove_item)
         self.layout().addWidget(self.remove_button)
+
+        self.remove_all_items_button = QtWidgets.QPushButton("Remove ALL Items")
+        self.remove_all_items_button.clicked.connect(self.remove_all_items)
+        self.layout().addWidget(self.remove_all_items_button)
 
         self.up_button = QtWidgets.QPushButton("Move Up")
         self.up_button.clicked.connect(self.move_item_up)
@@ -176,6 +201,18 @@ class QueueWidget(QtWidgets.QWidget):
             self.model.remove_item(index)
             self.update_list()
 
+    def remove_all_items(self):
+        reply = QtWidgets.QMessageBox.question(
+                self,
+                "Remove all items",
+                "This will remove all items from list, Are you sure?",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                QtWidgets.QMessageBox.No,
+                )
+        if reply == QtWidgets.QMessageBox.Yes:
+            self.model.remove_all_items()
+            self.update_list()
+
     def move_item_up(self):
         selected_items = self.list_widget.selectedItems()
         if selected_items:
@@ -189,6 +226,12 @@ class QueueWidget(QtWidgets.QWidget):
             index = self.list_widget.row(selected_items[0])
             self.model.move_item_down(index)
             self.update_list()
+
+    def dump_list(self):
+        pass
+
+    def load_list(self):
+        return []
 
     def update_list(self):
         self.list_widget.clear()
@@ -211,7 +254,7 @@ class QueueWidget(QtWidgets.QWidget):
             list_item.setForeground(QtGui.QBrush(item.status.value[0]))
             list_item.setBackground(QtGui.QBrush(item.status.value[1]))
             self.list_widget.addItem(list_item)
-
+        self.dump_list()
         self.queue_updated.emit(self.model.get_items())
 
 
@@ -263,6 +306,20 @@ class SamplePositionQueueWidget(QueueWidget):
         except ValueError as e:
             show_error_message(str(e))
 
+    def dump_list(self):
+        pos_list = []
+        for pos_item in self.model.get_items():
+            pos_list.append({"label": pos_item.label, "data": [pos_item.data.x, pos_item.data.y, pos_item.data.z]})
+        with open("position_queue.json", "w", encoding="utf-8") as f:
+            json.dump(pos_list, f, indent=2)
+
+    def load_list(self):
+        path = Path("position_queue.json")
+        if not path.exists():
+            return []
+        with path.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+        return [QueueItem(label=d["label"], data=Position(d["data"][0], d["data"][1], d["data"][2])) for d in payload]
 
 class CollectionQueueWidget(QueueWidget):
     selected_item_data_signal = QtCore.Signal(object, int)
@@ -305,7 +362,30 @@ class CollectionQueueWidget(QueueWidget):
             show_error_message(str(e))
         self.update_list()
 
+    def item_to_dict(self, item: QueueItem):
+        return {
+                "label": item.label,
+                "data": asdict(item.data),
+                "status": item.status.name
+                }
 
+    def item_from_dict(self, d: dict):
+        item = QueueItem(label=d["label"], data = MaiaFlyDefinition(**d["data"]))
+        item.status = RequestStatus[d["status"]]
+        return item
+
+    def dump_list(self):
+        serialized_list = [self.item_to_dict(item) for item in self.model.get_items()]
+        with open("request_queue.json", "w", encoding="utf-8") as f:
+            json.dump(serialized_list, f, indent=2)
+
+    def load_list(self):
+        path = Path("request_queue.json")
+        if not path.exists():
+            return []
+        with path.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+        return [self.item_from_dict(d) for d in payload]
 
 class RunEngineState(str, Enum):
     idle = "idle"
@@ -315,6 +395,7 @@ class RunEngineState(str, Enum):
 
 def maia_plan(payload):
     def main_plan(payload):
+        md = payload.md if isinstance(payload.md, dict) else asdict(payload.md)
         yield from fly_maia(
                 ystart=payload.ystart,
                 ystop=payload.ystop,
@@ -323,7 +404,7 @@ def maia_plan(payload):
                 xstop=payload.xstop,
                 xpitch=payload.xpitch,
                 dwell=payload.dwell,
-                md=asdict(payload.md),
+                md=md,
                 hf_stage=M,
                 maia=maia,
                 print_params=True,
@@ -412,7 +493,7 @@ class RunEngineControls:
                         item.data.maia_scan_number = int(self.maia_scan_number_edit.text())
                         item.data.path = f"/nsls2/data/xfm/proposals/{current_cycle}/pass-{self.proposal_number_edit.text()}/assets/384B4/{item.data.md.type}/{self.maia_scan_number_edit.text()}"
                     self.GUI.queue_widget.set_status(item, RequestStatus.COLLECTING)
-                    self.RE(
+                    item.data.bluesky_run_id, = self.RE(
                         maia_plan(payload)
                     )
                     self.GUI.queue_widget.set_status(item, RequestStatus.COMPLETE)
@@ -445,6 +526,8 @@ class RunEngineControls:
                     data["Step size (um)"].append(item.data.xpitch)
                     data["Path"].append(item.data.path)
                     data["Owner"].append(item.data.md.owner)
+                    data["MAIA scan number"].append(item.data.maia_scan_number)
+                    data["Bluesky RUN ID"].append(item.data.bluesky_run_id)
             df = pd.DataFrame(data)
             df.to_excel(fname, index=False)
 
@@ -1095,11 +1178,11 @@ class MAIAGUIMainWindow(QtWidgets.QMainWindow):
         fileMenu = QtWidgets.QMenu("&File", self)
         menuBar.addMenu(fileMenu)
         # Adding actions to the File menu
-        openAction = QtWidgets.QAction("&Open Excel Plan", self)
+        openAction = QtGui.QAction("&Open Excel Plan", self)
         fileMenu.addAction(openAction)
         openAction.triggered.connect(self.import_excel_plan)
 
-        exitAction = QtWidgets.QAction("&Exit", self)
+        exitAction = QtGui.QAction("&Exit", self)
         exitAction.triggered.connect(self.close)  # Connect to close the application
         fileMenu.addAction(exitAction)
 
@@ -1133,6 +1216,7 @@ class MAIAGUIMainWindow(QtWidgets.QMainWindow):
         self.sample_control_widget.saved_positions_list.queue_updated.connect(
             self.scan_setup_widget.update_combo_boxes
         )
+        self.sample_control_widget.saved_positions_list.update_list()
         self.scan_setup_widget.add_to_queue_signal.connect(
             self.scan_control_widget.queue_widget.add_item
         )
@@ -1203,7 +1287,10 @@ class MAIAGUIMainWindow(QtWidgets.QMainWindow):
         dlg.exec()
 
 
-_create_qApp()
+# _create_qApp()
+qapp = QtWidgets.QApplication.instance()
+if qapp is None:
+    qapp = QtWidgets.QApplication([])
 
 try:
     maia_gui.close()
